@@ -1,0 +1,29 @@
+GAN: Generative Adversarial Networks, https://arxiv.org/abs/1406.2661
+CGAN: Conditional Generative Adversarial Nets, https://arxiv.org/abs/1411.1784
+WGAN: Wasserstein GAN, https://arxiv.org/abs/1701.07875v2
+WGAN-GP: Improved Training of Wasserstein GANs, https://arxiv.org/abs/1704.00028
+Improved GAN:  Improved Techniques for Training GANs, https://arxiv.org/abs/1606.03498
+BiGAN: Adversarial Feature Learning, https://arxiv.org/abs/1605.09782v7
+LAPGAN: Deep Generative Image Models using a Laplacian Pyramid of Adversarial Networks, https://arxiv.org/abs/1506.05751
+AC-GAN: Conditional Image Synthesis With Auxiliary Classifier GANs, https://arxiv.org/abs/1610.09585
+BEGAN: Boundary Equilibrium Generative Adversarial Networks, https://arxiv.org/abs/1703.10717
+pix2pix: Image-to-Image Translation with Conditional Adversarial Networks, https://arxiv.org/abs/1611.07004(图像翻译、编辑相关)
+CycleGAN: Unpaired Image-to-Image Translation using Cycle-Consistent Adversarial Networks, https://arxiv.org/abs/1703.10593(图像翻译、编辑相关)
+GeneGAN: Learning Object Transfiguration and Attribute Subspace from Unpaired Data, https://arxiv.org/abs/1705.04932(图像翻译、编辑相关)
+DTN: Unsupervised Cross-Domain Image Generation, https://arxiv.org/abs/1611.02200(图像翻译、编辑相关)
+UNIT: Unsupervised Image-to-Image Translation Networks, https://arxiv.org/abs/1703.00848(图像翻译、编辑相关)
+Fader Networks: Manipulating Images by Sliding Attributes, https://arxiv.org/abs/1706.00409(图像翻译、编辑相关)
+TP-GAN: Beyond Face Rotation: Global and Local Perception GAN for Photorealistic and Identity Preserving Frontal View Synthesis, https://arxiv.org/abs/1704.04086 (图像翻译、编辑相关)
+StackGAN: Text to Photo-realistic Image Synthesis with Stacked Generative Adversarial Networks, https://arxiv.org/abs/1612.03242v1
+VAE-GAN, Autoencoding beyond pixels using a learned similarity metric, https://arxiv.org/abs/1512.09300
+PG-GAN: Progressive Growing of GANs for Improved Quality, Stability, and Variation, http://arxiv.org/abs/1710.10196
+SNGAN: Spectral Normalization for Generative Adversarial Networks, https://openreview.net/pdf?id=B1QRgziT-
+
+
+其他（主要是分类相关）：
+CatGAN: Unsupervised and Semi-supervised Learning with Categorical Generative Adversarial Networks, https://arxiv.org/abs/1511.06390v2
+InfoGAN: Interpretable Representation Learning by Information Maximizing Generative Adversarial Nets, https://arxiv.org/abs/1606.03657v1
+Triple-GAN: Triple Generative Adversarial Nets, https://arxiv.org/abs/1703.02291v2
+Δ-GAN: Triangle Generative Adversarial Networks, https://arxiv.org/abs/1709.06548
+Bad-GAN: Good Semi-supervised Learning that Requires a Bad GAN, https://arxiv.org/abs/1705.09783
+AAE:Adversarial Autoencoders, https://arxiv.org/abs/1511.05644
