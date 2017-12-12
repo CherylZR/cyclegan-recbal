@@ -62,12 +62,12 @@ class Pix2PixHD():
 			X_real, Y_real = self.numpy2var(A, B)
 
 			# update D
-			feat_real = self.D(torch.cat((X_real, Y_real), dim=1))
+			feat_real = self.D(torch.cat([X_real, Y_real], dim=1))
 
-			Y_fake = self.G(X)
-			feat_fake = self.D(pool.query(torch.cat((X_real, Y_fake.detach()), dim=1)))
+			Y_fake = self.G(X_real)
+			feat_fake = self.D(pool.query(torch.cat([X_real, Y_fake.detach()], dim=1)))
 
-			self.optim_D.zero_grad()
+			optim_D.zero_grad()
 			d_loss = 0.0
 			for d_real in feat_real:
 				d_loss += adv_criterion(d_real[-1], label_true)
@@ -75,22 +75,27 @@ class Pix2PixHD():
 				d_loss += adv_criterion(d_fake[-1], label_false)
 			d_loss = d_loss / (len(feat_fake) + len(feat_real))
 			d_loss.backward()
-			self.optim_D.step()
+			optim_D.step()
 
 			# update G
-			self.optim_G.zero_grad()
-			feat_fake = self.D(torch.cat((X_real, Y_fake), dim=1))
+			optim_G.zero_grad()
+			feat_fake = self.D(torch.cat([X_real, Y_fake], dim=1))
 			g_fm_loss = 0.0
 			g_adv_loss = 0.0
 			g_perceptual_loss = 0.0
 			for i in range(len(feat_fake)):
-				weight = 1.0 / (len(feat_fake[i]) - 1.0) / len(feat_fake)
-				for ff, fr in zip(feat[feat_fake[i][:-1], feat_real[i][:-1]]):
+				if len(feat_fake[i]) == 1:
+					weight = 1
+				else:
+					weight = 1.0 / (len(feat_fake[i]) - 1.0) / len(feat_fake)
+				for ff, fr in zip(feat_fake[i][:-1], feat_real[i][:-1]):
 					g_fm_loss += fm_criterion(ff, fr.detach()) * lam_fm * weight
 				g_adv_loss += adv_criterion(feat_fake[i][-1], label_true) / len(feat_fake)
 			g_loss = g_fm_loss + g_adv_loss + g_perceptual_loss
 			g_loss.backward()
-			self.optim_G.step()
+			optim_G.step()
+
+			print('[%s|%s], d_loss: %.4f, g_loss: %.4f' % (it, num_it, d_loss.data[0], g_loss.data[0]))
 
 			if (it % 500 == 0 and it > 0) or (it == num_it-1):
 				samples = np.concatenate((A[0], B[0], np.transpose(Y_fake[0].cpu().data.numpy(), [1,2,0])), axis=1)
@@ -101,7 +106,7 @@ class Pix2PixHD():
 
 
 if __name__ == '__main__':
-	gpu = '6'
+	gpu = '7'
 	num_it = 100000
 	sample_dir = 'exp/pix2pixHD/samples'
 	ckpt_dir = 'exp/pix2pixHD/ckpts'
