@@ -7,9 +7,9 @@ import h5py
 
 prefix ='/data/rui.wu/gapeng/fader_nets/datasets/'
 
-def get_img(img_path, is_crop=True, crop_h=256, resize_h=64, resize_w=None, normalize=False, mode='RGB'):
-    img = scipy.misc.imread(img_path, mode=mode).astype(np.float)
-    if resize_h is not None or resize_w is not None:
+def get_img(img_path, is_crop=True, crop_h=256, resize_h=64, resize_w=None, normalize=False, level=None, mode='RGB'):
+    img = scipy.misc.imread(img_path, mode=mode).astype(np.float32)
+    if resize_h is None or resize_w is None:
         if resize_w is None:
             resize_w = resize_h
         else:
@@ -24,9 +24,17 @@ def get_img(img_path, is_crop=True, crop_h=256, resize_h=64, resize_w=None, norm
         if resize_w is None and resize_h is None:
             cropped_image = img
         else:
-            cropped_image = scipy.misc.imresize(img,[resize_h, resize_w])
+            cropped_image = scipy.misc.imresize(img, [resize_h, resize_w], interp='nearest')
+    if level is not None:
+        min_level, max_level = int(level), int(np.ceil(level))   # ignore the int part, do not check level and size's consistency
+        min_w, max_w = int(level+1) - level, level - min_level
+        size = cropped_image.shape
+        if min_level < max_level:
+            cropped_image = scipy.misc.imresize(scipy.misc.imresize(cropped_image, (size[0]//2, size[1]//2), interp='nearest'), size[:2], interp='nearest')*min_w + cropped_image*max_w
     if normalize:
         cropped_image = cropped_image/127.5 - 1.0
+    if mode == 'L':
+        return cropped_image
     return np.transpose(cropped_image, [2, 0, 1])
 
 
@@ -36,11 +44,11 @@ class CelebA():
         self.channel = 3
         self.data = glob(os.path.join(datapath, '*.jpg'))
 
-    def __call__(self, batch_size, size):
+    def __call__(self, batch_size, size, level=None):
         batch_number = len(self.data)/batch_size
         path_list = [self.data[i] for i in np.random.randint(len(self.data), size=batch_size)]
         file_list = [p.split('/')[-1] for p in path_list]
-        batch = [get_img(img_path, True, 178, size, size, True) for img_path in path_list]
+        batch = [get_img(img_path, True, 178, size, size, True, level) for img_path in path_list]
         batch_imgs = np.array(batch).astype(np.float32)
         return batch_imgs
 
@@ -106,20 +114,20 @@ class Cityscapes():
             self.files = f.read().strip().split('\n')
         self.datapath = []
         for file in self.files:
-            self.datapath += file.split(' ')
+            self.datapath += [file.split(' ')]
         self.label_size = 21
         self.size = (256, 512)
         self.N = len(self.datapath)
-        self.I = np.eye(self.label_size+1)
+        self.I = np.eye(self.label_size, dtype=np.float32)
 
 
     def __call__(self, batch_size):
         idx = np.random.choice(self.N, size=batch_size)
         X = np.array([get_img(self.datapath[id][0], False, resize_h=self.size[0], resize_w=self.size[1], normalize=True, mode='RGB') for id in idx])
-        Y = np.array([get_img(self.datapath[id][1], False, resize_h=self.size[0], resize_w=self.size[1], mode='L') for id in idx])
+        Y = np.array([get_img(self.datapath[id][1], False, resize_h=self.size[0], resize_w=self.size[1], normalize=False, mode='L') for id in idx])
         Y[Y == 255] = 20
-        Y = self.I[Y]
-        return Y, X
+        Y = self.I[Y].transpose([0, 3, 1, 2])
+        return Y, X.astype(np.float32)
 
     def save_imgs(self, samples, file_name):
         N_samples, channel, height, width = samples.shape
