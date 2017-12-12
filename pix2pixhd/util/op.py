@@ -18,16 +18,17 @@ class SNConv2d(nn.Conv2d):
 
 	def forward(self, x):
 		# apply spectral norm
-		w = self.weight.view(self.weight.size(0), -1)
-		u = Variable(self.u)
-		for i in range(self.it):
-			v = w.t().mm(u)
-			v = v / (torch.norm(v) + self.eps)
-			u = w.mm(v)
-			u = u / (torch.norm(u) + self.eps)
-		snorm = torch.sum(u.t().mm(w).mm(v).data)
-		self.weight.data.div_(snorm)
-		self.u = u.data
+		if self.it > 0:
+			w = self.weight.view(self.weight.size(0), -1)
+			u = Variable(self.u)
+			for i in range(self.it):
+				v = w.t().mm(u)
+				v = v / (torch.norm(v) + self.eps)
+				u = w.mm(v)
+				u = u / (torch.norm(u) + self.eps)
+			snorm = torch.sum(u.t().mm(w).mm(v).data)
+			self.weight.data.div_(snorm)
+			self.u = u.data
 
 		return super(SNConv2d, self).forward(x)
 
@@ -45,16 +46,17 @@ class SNConvTranspose2d(nn.Conv2d):
 
 	def forward(self, x):
 		# apply spectral norm
-		w = self.weight.view(self.weight.size(0), -1)
-		u = Variable(self.u)
-		for i in range(self.it):
-			v = w.t().mm(u)
-			v = v / (torch.norm(v) + self.eps)
-			u = w.mm(v)
-			u = u / (torch.norm(u) + self.eps)
-		snorm = torch.sum(u.t().mm(w).mm(v).data)
-		self.weight.data.div_(snorm)
-		self.u = u.data
+		if self.it > 0:
+			w = self.weight.view(self.weight.size(0), -1)
+			u = Variable(self.u)
+			for i in range(self.it):
+				v = w.t().mm(u)
+				v = v / (torch.norm(v) + self.eps)
+				u = w.mm(v)
+				u = u / (torch.norm(u) + self.eps)
+			snorm = torch.sum(u.t().mm(w).mm(v).data)
+			self.weight.data.div_(snorm)
+			self.u = u.data
 
 		return super(SNConvTranspose2d, self).forward(x)	
 
@@ -64,23 +66,25 @@ class SNLinear(nn.Linear):
 		Linear with spectral normalization[1].
 		[1]. Spectral normalization: https://openreview.net/pdf?id=B1QRgziT-
 	'''
-	def __init__(self, in_features, out_features, bias=True, it=1):
+	def __init__(self, in_features, out_features, bias=True, it=1, eps=1e-12):
 		super(SNLinear, self).__init__(in_features, out_features, bias)
 		self.it = it
+		self.eps = eps
 		self.register_buffer('u', torch.randn(self.weight.size(0), 1))
 
 	def forward(self, x):
 		# apply spectral norm
-		w = self.weight
-		u = Variable(self.u)
-		for i in range(self.it):
-			v = w.t().mm(u)
-			v = v / (torch.norm(v) + 1e-12)
-			u = w.mm(v)
-			u = u / (torch.norm(u) + 1e-12)
-		snorm = torch.sum(u.t().mm(w).mm(v).data)
-		self.weight.data.div_(snorm)
-		self.u = u.data
+		if self.it > 0:
+			w = self.weight.view(self.weight.size(0), -1)
+			u = Variable(self.u)
+			for i in range(self.it):
+				v = w.t().mm(u)
+				v = v / (torch.norm(v) + self.eps)
+				u = w.mm(v)
+				u = u / (torch.norm(u) + self.eps)
+			snorm = torch.sum(u.t().mm(w).mm(v).data)
+			self.weight.data.div_(snorm)
+			self.u = u.data
 
 		return super(SNLinear, self).forward(x)
 
