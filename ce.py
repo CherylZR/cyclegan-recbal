@@ -505,22 +505,29 @@ class CompletionNet(nn.Module):
             return self.model(x)
 
 class LocalGlobalD(nn.Module):
-    def __init__(self, input_nc, gpu_ids=[]):
+    def __init__(self, opt):
         super(LocalGlobalD, self).__init__()
-        self.gpu_ids = gpu_ids
-
-    def forward(self, input):
+        self.gpu_ids = opt.gpu_ids
+        self.localD = LocalD(opt)
+        self.globalD = GlobalD()
+        self.last2 = nn.Linear(2048, 1)
+        self.last1 = nn.Sigmoid()
+    def forward(self, input, center):
         if len(self.gpu_ids) and isinstance(input.data, torch.cuda.FloatTensor):
-            return nn.parallel.data_parallel(self.model, input, self.gpu_ids)
+            local_out = self.localD(input, center)
+            global_out = self.globalD(input)
+            out = [local_out, global_out]
+            out = torch.cat(out, 1)
+            out = self.last2(out)
+            return self.last1(out)
 
 class LocalD(nn.Module):
     def __init__(self, opt):
         super(LocalD, self).__init__()
-        self.gpu_ids = opt.gpu_ids
-        input_cropped = torch.cuda.FloatTensor(opt.batchSize, 3, opt.fineSize/2, opt.fineSize/2)
-        self.input_cropped = Variable(input_cropped)
-        model = [
-            nn.Conv2d(input_nc, 64, kernel_size=5, stride=2, padding=2, bias=False),
+        self.batchSize = opt.batchSize
+        self.fineSize = opt.fineSize
+        sequence = [
+            nn.Conv2d(3, 64, kernel_size=5, stride=2, padding=2, bias=False),
             nn.LeakyReLU(0.2, inplace=True),
             nn.InstanceNorm2d(64),
             nn.Conv2d(64, 128, kernel_size=5, stride=2, padding=2, bias=False),
@@ -536,13 +543,44 @@ class LocalD(nn.Module):
             nn.LeakyReLU(0.2, inplace=True),
             nn.Linear(512*4*4, 1024)
         ]
-        self.model = nn.Sequential(*model)
+        self.sequence = nn.Sequential(*sequence)
 
     def forward(self, input, center):  # center is the generated mask's center before G
-
-        self.input_cropped.data.copy_(input.data[:, :,
+        input_cropped = torch.cuda.FloatTensor(self.batchSize, 3, self.fineSize/2, self.fineSize/2)
+        input_cropped = Variable(input_cropped)
+        input_cropped.data.copy_(input.data[:, :,
                                (center[0]-64):(center[0]+63),
                                (center[1]-64):(center[1]+63)])
+        # input_cropped.data.copy_(input.data[:, :, (self.fineSize/4-1):(self.fineSize/4*3), (self.fineSize/4-1):(opt.fineSize/4*3)])
+        return self.sequence(input_cropped)
+
+class GlobalD(nn.Module):
+    def __init__(self):
+        super(GlobalD, self).__init__()
+        sequence = [
+            nn.Conv2d(3, 64, kernel_size=5, stride=2, padding=2, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.InstanceNorm2d(64),
+            nn.Conv2d(64, 128, kernel_size=5, stride=2, padding=2, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.InstanceNorm2d(128),
+            nn.Conv2d(128, 256, kernel_size=5, stride=2, padding=2, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.InstanceNorm2d(256),
+            nn.Conv2d(256, 512, kernel_size=5, stride=2, padding=2, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.InstanceNorm2d(512),
+            nn.Conv2d(512, 512, kernel_size=5, stride=2, padding=2, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.InstanceNorm2d(512),
+            nn.Conv2d(512, 512, kernel_size=5, stride=2, padding=2, bias=False),
+            nn.LeakyReLU(0.2, inplace=True),
+            nn.Linear(512*4*4, 1024)
+        ]
+        self.sequence = nn.Sequential(*sequence)
+
+    def forward(self, input):  # center is the generated mask's center before G
+        return self.sequence(input)
 
 
 
