@@ -13,7 +13,7 @@ import sys
 
 class CycleGANMaskModel(BaseModel):
     def name(self):
-        return 'CycleGANModel'
+        return 'CycleGANMaskModel'
 
     def initialize(self, opt):
         BaseModel.initialize(self, opt)
@@ -56,7 +56,8 @@ class CycleGANMaskModel(BaseModel):
             self.fake_MB_pool = ImagePool(opt.pool_size)
             # define loss functions
             self.criterionGAN = networks.GANLoss(use_lsgan=not opt.no_lsgan, tensor=self.Tensor)
-            self.criterionCycle = torch.nn.L1Loss()
+            # self.criterionCycle = torch.nn.L1Loss()
+            self.criterionCycle = networks.CrossEntropyLoss2d()
             self.criterionIdt = torch.nn.L1Loss()
             # initialize optimizers
             self.optimizer_G = torch.optim.Adam(itertools.chain(self.netG_A.parameters(), self.netG_B.parameters()),
@@ -79,6 +80,12 @@ class CycleGANMaskModel(BaseModel):
             networks.print_network(self.netD_B)
         print('-----------------------------------------------')
 
+    def ToMask(self, probmap):
+        probmap_array = probmap.numpy()
+        maxindex_array = np.argmax(probmap_array, axis=1)
+        mask = torch.from_numpy(maxindex_array)
+        return mask
+
     def set_input(self, input):
         AtoB = self.opt.which_direction == 'AtoB'
         input_A = input['A' if AtoB else 'B']
@@ -97,25 +104,15 @@ class CycleGANMaskModel(BaseModel):
 
 
     def test(self):
-        # real_A = Variable(self.input_A, volatile=True)
-        # fake_B = self.netG_A(real_A)
-        # self.rec_A = self.netG_B(fake_B).data
-        # self.fake_B = fake_B.data
-
         fake_MB = self.netG_A(Variable(torch.cat([self.input_A, self.input_MA], 1), volatile=True))
-        input_MB = fake_MB.data
+        input_MB = ToMask(fake_MB.data)
         self.rec_MA = self.netG_B(Variable(torch.cat([self.input_A, input_MB], 1))).data
-        self.fake_MB = fake_MB.data
-
-        # real_B = Variable(self.input_B, volatile=True)
-        # fake_A = self.netG_B(real_B)
-        # self.rec_B = self.netG_A(fake_A).data
-        # self.fake_A = fake_A.data
+        self.fake_MB = input_MB
 
         fake_MA = self.netG_B(Variable(torch.cat([self.input_B, self.input_MB], 1), volatile=True))
-        input_MA = fake_MA.data
+        input_MA = ToMask(fake_MA.data)
         self.rec_MB = self.netG_A(Variable(torch.cat([self.input_B, input_MA], 1))).data
-        self.fake_MA = fake_MA.data
+        self.fake_MA = input_MA
 
 
     # get image paths
@@ -158,15 +155,17 @@ class CycleGANMaskModel(BaseModel):
         # Identity loss
         if lambda_idt > 0:
             # G_A should be identity if real_B is fed.
-            idt_MA = self.netG_B(Variable(torch.cat([self.input_A, self.input_MA], 1)))
-            loss_idt_A = self.criterionIdt(idt_MA, Variable(self.input_MA)) * lambda_A * lambda_idt
+            idt_MA_out = self.netG_B(Variable(torch.cat([self.input_A, self.input_MA], 1)))
+            idt_MA = self.ToMask(idt_MA_out.data)
+            loss_idt_A = self.criterionIdt(Variable(idt_MA), Variable(self.input_MA)) * lambda_A * lambda_idt
 
             # G_B should be identity if real_A is fed.
-            idt_MB = self.netG_A(Variable(torch.cat([self.input_B, self.input_MB], 1)))
-            loss_idt_B = self.criterionIdt(idt_MB, Variable(self.input_MB)) * lambda_B * lambda_idt
+            idt_MB_out = self.netG_A(Variable(torch.cat([self.input_B, self.input_MB], 1)))
+            idt_MB = self.ToMask(idt_MB_out.data)
+            loss_idt_B = self.criterionIdt(Variable(idt_MB), Variable(self.input_MB)) * lambda_B * lambda_idt
 
-            self.idt_MA = idt_MA.data
-            self.idt_MB = idt_MB.data
+            self.idt_MA = idt_MA
+            self.idt_MB = idt_MB
             self.loss_idt_A = loss_idt_A.data[0]
             self.loss_idt_B = loss_idt_B.data[0]
         else:
@@ -176,34 +175,38 @@ class CycleGANMaskModel(BaseModel):
             self.loss_idt_B = 0
 
         # GAN loss D_A(G_A(A))
-        fake_MB = self.netG_A(Variable(torch.cat([self.input_A, self.input_MA], 1)))
+        fake_MB_out = self.netG_A(Variable(torch.cat([self.input_A, self.input_MA], 1)))
         # print(fake_MB.size())
         # print(self.input_A.size())
-        pred_fake = self.netD_A(Variable(torch.cat([self.input_A, fake_MB.data], 1)))
+        fake_MB = self.ToMask(fake_MB_out.data)
+        pred_fake = self.netD_A(Variable(torch.cat([self.input_A, fake_MB], 1)))
         loss_G_A = self.criterionGAN(pred_fake, True)
 
 
         # GAN loss D_B(G_B(B))
-        fake_MA = self.netG_B(Variable(torch.cat([self.input_B, self.input_MB], 1)))
-        pred_fake = self.netD_B(Variable(torch.cat([self.input_B, fake_MA.data], 1)))
+        fake_MA_out = self.netG_B(Variable(torch.cat([self.input_B, self.input_MB], 1)))
+        fake_MA = self.ToMask(fake_MA_out.data)
+        pred_fake = self.netD_B(Variable(torch.cat([self.input_B, fake_MA], 1)))
         loss_G_B = self.criterionGAN(pred_fake, True)
 
         # Forward cycle loss
-        rec_MA = self.netG_B(Variable(torch.cat([self.input_A, fake_MB.data], 1)))
-        loss_cycle_A = self.criterionCycle(rec_MA, self.real_MA) * lambda_A
+        rec_MA_out = self.netG_B(Variable(torch.cat([self.input_A, fake_MB], 1)))
+        rec_MA = self.ToMask(rec_MA_out.data)
+        loss_cycle_A = self.criterionCycle(rec_MA_out, self.real_MA.type()(new_type=torch.LongTensor)) * lambda_A
 
         # Backward cycle loss
-        rec_MB = self.netG_A(Variable(torch.cat([self.input_B, fake_MA.data], 1)))
-        loss_cycle_B = self.criterionCycle(rec_MB, self.real_MB) * lambda_B
+        rec_MB_out = self.netG_A(Variable(torch.cat([self.input_B, fake_MA], 1)))
+        rec_MB = self.ToMask(rec_MB_out.data)
+        loss_cycle_B = self.criterionCycle(rec_MB_out, self.real_MB.type()(new_type=torch.LongTensor)) * lambda_B
 
         # combined loss
         loss_G = loss_G_A + loss_G_B + loss_cycle_A + loss_cycle_B + loss_idt_A + loss_idt_B
         loss_G.backward()
 
-        self.fake_MB = fake_MB.data
-        self.fake_MA = fake_MA.data
-        self.rec_MA = rec_MA.data
-        self.rec_MB = rec_MB.data
+        self.fake_MB = fake_MB
+        self.fake_MA = fake_MA
+        self.rec_MA = rec_MA
+        self.rec_MB = rec_MB
 
         self.loss_G_A = loss_G_A.data[0]
         self.loss_G_B = loss_G_B.data[0]
